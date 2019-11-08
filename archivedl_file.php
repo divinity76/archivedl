@@ -3,6 +3,8 @@
 declare(strict_types = 1);
 require_once ('hhb_.inc.php');
 hhb_init ();
+/** @var int $argc */
+/** @var string[] $argv */
 if ($argc !== 3 && $argc !== 2) {
 	fprintf ( STDERR, "usage: %s timestamp url\n", $argv [0] );
 	fprintf ( STDERR, "usage: %s url\n", $argv [0] );
@@ -12,6 +14,7 @@ if ($argc !== 3 && $argc !== 2) {
 }
 if ($argc === 2) {
 	$tmp = $argv [1];
+	$matches = null;
 	if (! preg_match ( "/web\.archive\.org\/web\/(\d+)\/(.*)/", $tmp, $matches ) || count ( $matches ) !== 3) {
 		fprintf ( STDERR, "error: could not understand url: %s\n", $tmp );
 		die ( 1 );
@@ -31,12 +34,11 @@ if (! filter_var ( $argv [2], FILTER_VALIDATE_URL )) {
 }
 $archive_url = 'https://web.archive.org/web/' . $timestamp . 'id_/';
 define ( "ARCHIVE_URL", $archive_url );
-$FINAL_HTML = '';
 $url = $argv [2]; // https://web.archive.org/web/20091012061648id_/http://www.p4w.se
 $hc = new hhb_curl ( '', true );
 $hc->setopt_array ( array (
 		CURLOPT_TIMEOUT => 20,
-		CURLOPT_CONNECTTIMEOUT => 10 
+		CURLOPT_CONNECTTIMEOUT => 10
 ) ); // sometimes archive.org lags for quite a bit, so account for that.
 $url = $raw_url = geturl ( $url );
 $file = "index." . parse_url ( $argv [2], PHP_URL_HOST ) . "_" . $timestamp . ".html"; // "index." . bin2hex ( random_bytes ( 4 ) ) . ".html";
@@ -99,7 +101,7 @@ foreach ( $domd->getElementsByTagName ( "img" ) as $img ) {
 		fprintf ( STDERR, "warning: because http response code %d, ignoring url %s\n", $response, $src );
 		continue;
 	}
-	
+	$success = null;
 	$mime = image_mime ( $imageBinary, $src, $success );
 	if (! $success) {
 		// continue;
@@ -133,7 +135,7 @@ foreach ( $domd->getElementsByTagName ( "style" ) as $style ) {
 				fprintf ( STDERR, "warning: because http response code %d, ignoring CSS url %s\n", $response, $src );
 				continue;
 			}
-			
+
 			$mime = image_mime ( $imageBinary, $tmp, $success );
 			if (! $success) {
 				// continue;
@@ -195,7 +197,7 @@ foreach ( $domd->getElementsByTagName ( "link" ) as $link ) {
 				fprintf ( STDERR, "warning: because http response code %d, ignoring CSS url %s\n", $response, $src );
 				continue;
 			}
-			
+
 			$mime = image_mime ( $imageBinary, $tmp, $success );
 			if (! $success) {
 				// continue;
@@ -208,11 +210,11 @@ foreach ( $domd->getElementsByTagName ( "link" ) as $link ) {
 	}
 	$raw = $html;
 	// var_dump ( $urls );
-	
+
 	// die ( "FIXME" . __LINE__ );
-	
+
 	$new = $domd->createElement ( 'style' );
-	
+
 	$new->textContent = $raw;
 	$link->parentNode->insertBefore ( $new, $link );
 	$link->parentNode->removeChild ( $link );
@@ -231,48 +233,48 @@ $html = $domd->saveHTML ();
 file_put_contents ( "noscript.{$file}", $html );
 echo "saved as noscript.{$file}\n";
 
-if (($CSS_URL_WEIRDNESS = false)) {
-	$urls = [ ];
-	preg_match_all ( "/url\(\s*(.*?)\s*\)/", $html, $urls );
-	if (! empty ( $urls ) && ! empty ( $urls [1] )) {
-		$urls = $urls [1];
-		foreach ( $urls as $tmp ) {
-			$original = $tmp;
-			$tmp = str_ireplace ( ARCHIVE_URL, '', $tmp );
-			$tmp = relative_to_absolute ( $tmp, $url );
-			// hhb_var_dump($original,$tmp);continue;
-			if (empty ( $tmp )) {
-				// unsupported url (like mailto: or javascript )
-				continue;
-			}
-			// FIXME: the css urls should be css decoded and css re-encoded...
-			// hhb_var_dump($original,$tmp,absolute_to_relaitve ( $tmp, $url ));continue;
-			$html = str_replace ( $original, absolute_to_relaitve ( $tmp, $raw_url ), $html );
-			if (in_array ( $tmp, $to_download, true )) {
-				// already queued to download
-				continue;
-			}
-			if (in_array ( $tmp, $downloaded, true )) {
-				// already downloaded.
-				continue;
-			}
-			if (! in_array ( strtolower ( pathinfo ( parse_url ( $tmp ) ['path'], PATHINFO_EXTENSION ) ), $whitelist, true )) {
-				// blacklisted extension
-				// var_dump($url);
-				continue;
-			}
-			echo 'CSSadding ' . $tmp . " ( " . geturl ( $tmp ) . " )", PHP_EOL;
-			// die ( "FIXME" . __LINE__ );
-			++ $total;
-			$to_download [] = $tmp;
-			continue;
-		}
-		unset ( $fixurl, $addme );
-	}
-	// var_dump ( $urls );
-	
-	// die ( "FIXME" . __LINE__ );
-}
+// if (($CSS_URL_WEIRDNESS = false)) {
+// $urls = [ ];
+// preg_match_all ( "/url\(\s*(.*?)\s*\)/", $html, $urls );
+// if (! empty ( $urls ) && ! empty ( $urls [1] )) {
+// $urls = $urls [1];
+// foreach ( $urls as $tmp ) {
+// $original = $tmp;
+// $tmp = str_ireplace ( ARCHIVE_URL, '', $tmp );
+// $tmp = relative_to_absolute ( $tmp, $url );
+// // hhb_var_dump($original,$tmp);continue;
+// if (empty ( $tmp )) {
+// // unsupported url (like mailto: or javascript )
+// continue;
+// }
+// // FIXME: the css urls should be css decoded and css re-encoded...
+// // hhb_var_dump($original,$tmp,absolute_to_relaitve ( $tmp, $url ));continue;
+// $html = str_replace ( $original, absolute_to_relaitve ( $tmp, $raw_url ), $html );
+// if (in_array ( $tmp, $to_download, true )) {
+// // already queued to download
+// continue;
+// }
+// if (in_array ( $tmp, $downloaded, true )) {
+// // already downloaded.
+// continue;
+// }
+// if (! in_array ( strtolower ( pathinfo ( parse_url ( $tmp ) ['path'], PATHINFO_EXTENSION ) ), $whitelist, true )) {
+// // blacklisted extension
+// // var_dump($url);
+// continue;
+// }
+// echo 'CSSadding ' . $tmp . " ( " . geturl ( $tmp ) . " )", PHP_EOL;
+// // die ( "FIXME" . __LINE__ );
+// ++ $total;
+// $to_download [] = $tmp;
+// continue;
+// }
+// unset ( $fixurl, $addme );
+// }
+// // var_dump ( $urls );
+
+// // die ( "FIXME" . __LINE__ );
+// }
 function image_mime(string $imageBinary, string $warningUrl = NULL, bool &$sucess = NULL): string {
 	static $tmp = NULL;
 	if ($tmp === NULL) {
@@ -313,7 +315,9 @@ function absolute_url_to_filepath(string $url): string {
 function absolute_to_relaitve(string $absolute, string $source): string {
 	$absolute_ = $absolute;
 	$source_ = $source;
-	//
+	$absolute_; // debug variable
+	$source_; // debug variable
+	          //
 	$source = parse_url ( $source );
 	$source = $source ['host'] . '/' . ($source ['path'] ?? ''); // . ($source['query'] ?? '');
 	$source = preg_replace ( '/[\\/]+/', '/', $source );
@@ -361,7 +365,7 @@ function relative_to_absolute(string $relative, string $source): string {
 	$whitelist = array (
 			'http',
 			'https',
-			'ftp' 
+			'ftp'
 	);
 	if (! empty ( $info ['scheme'] ) && ! in_array ( strtolower ( $info ['scheme'] ), $whitelist, true )) {
 		// like mailto: or tlf: or whatever, unsupported
@@ -402,11 +406,11 @@ function relative_to_absolute(string $relative, string $source): string {
 	} else {
 		$ret = ($relainfo ['host'] ?? $sourceinfo ['host']) . ((isset ( $relainfo ['port'] ) || isset ( $sourceinfo ['port'] )) ? (':' . ($relainfo ['port'] ?? $sourceinfo ['port'])) : '') . '/' . ($relainfo ['path'] ?? $sourceinfo ['path'] ?? '') . ($relainfo ['query'] ?? '');
 		$ret = preg_replace ( '/[\\/]+/', '/', $ret );
-		
+
 		$ret = ($relainfo ['scheme'] ?? $sourceinfo ['scheme']) . '://' . $ret;
 	}
 	// hhb_var_dump($sourceinfo, $relainfo, $ret) & die(); //
-	
+
 	return $ret;
 }
 function geturl(string $url): string {
